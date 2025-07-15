@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Clock, MapPin, Plus, X, CheckCircle } from 'lucide-react';
 import { useIntersectionObserver } from '../hooks/useIntersectionObserver';
 
@@ -94,6 +94,7 @@ const RemindersSection = () => {
   const [reminders, setReminders] = useState([]);
   const [battery, setBattery] = useState(null);
   const [network, setNetwork] = useState(null);
+  const placeRef = useRef('your area');
 
   const getTimeSegment = () => {
     const hour = new Date().getHours();
@@ -118,6 +119,7 @@ const RemindersSection = () => {
       );
       const data = await res.json();
       const place = data.features?.[0]?.properties?.formatted || 'your area';
+      placeRef.current = place;
 
       if ('getBattery' in navigator) {
         navigator.getBattery().then(bat => {
@@ -129,52 +131,60 @@ const RemindersSection = () => {
       if (conn) {
         setNetwork(conn.effectiveType);
       }
-
-      const segment = getTimeSegment();
-      const baseTime = Date.now();
-
-      const suggestions = [
-        segment === 'morning' && {
-          title: 'Stretch & Hydrate',
-          description: `Start your morning right in ${place}`,
-          time: new Date(baseTime + 10 * 60000),
-          type: 'Health'
-        },
-        segment === 'afternoon' && {
-          title: 'Lunch Nearby',
-          description: `Try local lunch spots in ${place}`,
-          time: new Date(baseTime + 15 * 60000),
-          type: 'Food'
-        },
-        segment === 'evening' && {
-          title: 'Walk & Sunset',
-          description: `Explore ${place} during golden hour`,
-          time: new Date(baseTime + 20 * 60000),
-          type: 'Leisure'
-        },
-        segment === 'night' && {
-          title: 'Wind Down',
-          description: `Relax and plan your tomorrow`,
-          time: new Date(baseTime + 25 * 60000),
-          type: 'Wellness'
-        },
-        battery < 30 && {
-          title: 'Charge Your Device',
-          description: 'Battery is running low!',
-          time: new Date(baseTime + 5 * 60000),
-          type: 'Battery'
-        },
-        network && ['2g', '3g'].includes(network) && {
-          title: 'Low Internet Reminder',
-          description: 'Network speed is low, download offline maps.',
-          time: new Date(baseTime + 8 * 60000),
-          type: 'Connectivity'
-        }
-      ].filter(Boolean);
-
-      setReminders(prev => [...prev, ...suggestions.map(r => ({ ...r, id: Date.now() + Math.random(), isActive: true }))]);
     });
   }, []);
+
+  useEffect(() => {
+    if (battery === null || network === null) return;
+
+    const segment = getTimeSegment();
+    const baseTime = Date.now();
+
+    const suggestions = [
+      segment === 'morning' && {
+        title: 'Stretch & Hydrate',
+        description: `Start your morning right in ${placeRef.current}`,
+        time: new Date(baseTime + 10 * 60000),
+        type: 'Health'
+      },
+      segment === 'afternoon' && {
+        title: 'Lunch Nearby',
+        description: `Try local lunch spots in ${placeRef.current}`,
+        time: new Date(baseTime + 15 * 60000),
+        type: 'Food'
+      },
+      segment === 'evening' && {
+        title: 'Walk & Sunset',
+        description: `Explore ${placeRef.current} during golden hour`,
+        time: new Date(baseTime + 20 * 60000),
+        type: 'Leisure'
+      },
+      segment === 'night' && {
+        title: 'Wind Down',
+        description: `Relax and plan your tomorrow`,
+        time: new Date(baseTime + 25 * 60000),
+        type: 'Wellness'
+      },
+      battery < 30 && {
+        title: 'Charge Your Device',
+        description: 'Battery is running low!',
+        time: new Date(baseTime + 5 * 60000),
+        type: 'Battery'
+      },
+      network && ['2g', '3g'].includes(network) && {
+        title: 'Low Internet Reminder',
+        description: 'Network speed is low, download offline maps.',
+        time: new Date(baseTime + 8 * 60000),
+        type: 'Connectivity'
+      }
+    ].filter(Boolean);
+
+    setReminders(prev => {
+      const existingKeys = new Set(prev.map(r => r.title + r.description));
+      const newOnes = suggestions.filter(s => !existingKeys.has(s.title + s.description));
+      return [...prev, ...newOnes.map(s => ({ ...s, id: Date.now() + Math.random(), isActive: true }))];
+    });
+  }, [battery, network]);
 
   useEffect(() => {
     localStorage.setItem('reminders', JSON.stringify(reminders));
